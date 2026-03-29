@@ -23,3 +23,15 @@ jobs:
     
     - name: Run tests
       run: cargo test --package mdbook-html --features search --verbose
+
+  # Test cargo install --git
+  install-test:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Install Rust
+      uses: dtolnay/rust-action@stable
+    
+    - name: Test cargo install from git
+      run: |
+        cargo install --git https://github.com/CNCSMonster/mdbook-zh-search.git --locked
+        mdbook --version

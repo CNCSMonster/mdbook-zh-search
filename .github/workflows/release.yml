@@ -1,0 +1,131 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version number (e.g., v0.1.0)'
+        required: true
+        type: string
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # Build source tarball
+  create-source-tarball:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Create source tarball
+      run: |
+        tar -czf mdbook-zh-search-source.tar.gz --exclude='.git' --exclude='target' .
+        echo "TARBALL_NAME=mdbook-zh-search-source.tar.gz" >> $GITHUB_ENV
+
+    - name: Upload source tarball
+      uses: actions/upload-artifact@v4
+      with:
+        name: source-tarball
+        path: mdbook-zh-search-source.tar.gz
+
+  # Build binaries for different platforms
+  build:
+    needs: create-source-tarball
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            artifact: mdbook-zh-search-linux
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+            artifact: mdbook-zh-search-linux-musl
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            artifact: mdbook-zh-search-macos-intel
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            artifact: mdbook-zh-search-macos-arm
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            artifact: mdbook-zh-search-windows.exe
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install Rust
+      uses: dtolnay/rust-action@stable
+      with:
+        targets: ${{ matrix.target }}
+
+    - name: Install musl-tools (for musl build)
+      if: matrix.target == 'x86_64-unknown-linux-musl'
+      run: sudo apt-get update && sudo apt-get install -y musl-tools
+
+    - name: Build release binary
+      run: cargo build --release --target ${{ matrix.target }}
+
+    - name: Prepare binary
+      shell: bash
+      run: |
+        mkdir -p release
+        if [[ "${{ runner.os }}" == "Windows" ]]; then
+          cp target/${{ matrix.target }}/release/mdbook.exe release/${{ matrix.artifact }}
+        else
+          cp target/${{ matrix.target }}/release/mdbook release/${{ matrix.artifact }}
+        fi
+
+    - name: Upload binary artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ matrix.artifact }}
+        path: release/${{ matrix.artifact }}
+
+  # Create GitHub Release
+  create-release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Download all artifacts
+      uses: actions/download-artifact@v4
+      with:
+        path: artifacts
+
+    - name: Prepare release assets
+      run: |
+        cd artifacts
+        # Create checksums
+        for file in */*; do
+          if [ -f "$file" ]; then
+            sha256sum "$file" > "$file.sha256"
+          fi
+        done
+
+    - name: Get version
+      id: get_version
+      run: |
+        if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+          echo "version=${{ inputs.version }}" >> $GITHUB_OUTPUT
+        else
+          echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: ${{ steps.get_version.outputs.version }}
+        name: Release ${{ steps.get_version.outputs.version }}
+        draft: false
+        prerelease: false
+        generate_release_notes: true
+        files: |
+          artifacts/**/*
