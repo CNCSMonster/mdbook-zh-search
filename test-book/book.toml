@@ -1,0 +1,12 @@
+[book]
+title = "中文搜索测试书籍"
+authors = ["Test Author"]
+language = "zh"
+description = "A test book for Chinese search functionality"
+
+[output.html]
+default-theme = "light"
+
+[output.html.search]
+enable = true
+limit-results = 30

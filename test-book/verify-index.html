@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>搜索索引验证工具</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1 { color: #333; }
+        h2 { color: #666; font-size: 18px; }
+        .test-result {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+        }
+        .pass { background: #d4edda; color: #155724; }
+        .fail { background: #f8d7da; color: #721c24; }
+        .info { background: #d1ecf1; color: #0c5460; }
+        pre {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 4px;
+            overflow-x: auto;
+            font-size: 12px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover { background: #0056b3; }
+        .search-box {
+            width: 100%;
+            padding: 10px;
+            font-size: 16px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .results {
+            margin-top: 10px;
+        }
+        .result-item {
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+        }
+        .result-item a {
+            color: #007bff;
+            text-decoration: none;
+        }
+        .result-item a:hover {
+            text-decoration: underline;
+        }
+        .highlight {
+            background: yellow;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 mdBook 中文搜索索引验证工具</h1>
+        <p>此工具用于验证 mdBook 中文搜索分词功能是否正常工作。</p>
+    </div>
+
+    <div class="container">
+        <h2>1. 索引数据检查</h2>
+        <button onclick="loadIndex()">加载搜索索引</button>
+        <div id="index-info" class="info test-result" style="display:none;"></div>
+    </div>
+
+    <div class="container">
+        <h2>2. 分词测试</h2>
+        <div id="tokenization-tests"></div>
+    </div>
+
+    <div class="container">
+        <h2>3. 搜索测试</h2>
+        <input type="text" class="search-box" id="search-input" placeholder="输入搜索关键词..." oninput="doSearch()">
+        <div id="search-results" class="results"></div>
+    </div>
+
+    <div class="container">
+        <h2>4. 索引内容预览</h2>
+        <pre id="index-preview">点击"加载搜索索引"按钮查看索引内容</pre>
+    </div>
+
+    <script>
+        let searchIndex = null;
+        let docUrls = [];
+
+        function loadIndex() {
+            // Load the search index
+            const script = document.createElement('script');
+            script.src = 'searchindex-8f2ef454.js';
+            script.onload = function() {
+                if (window.search && window.search.index) {
+                    searchIndex = window.search.index;
+                    docUrls = window.search.doc_urls || [];
+                    
+                    const infoDiv = document.getElementById('index-info');
+                    infoDiv.style.display = 'block';
+                    infoDiv.innerHTML = `
+                        <strong>✅ 索引加载成功！</strong><br>
+                        文档数量：${docUrls.length}<br>
+                        索引字段：title, body, breadcrumbs
+                    `;
+                    
+                    // Show index preview
+                    document.getElementById('index-preview').textContent = 
+                        JSON.stringify({
+                            doc_count: docUrls.length,
+                            sample_docs: Object.entries(searchIndex.documentStore.docs)
+                                .slice(0, 3)
+                                .map(([id, doc]) => ({id, title: doc.title, body_preview: doc.body.substring(0, 100) + '...'}))
+                        }, null, 2);
+                    
+                    runTokenizationTests();
+                } else {
+                    alert('无法加载搜索索引');
+                }
+            };
+            document.head.appendChild(script);
+        }
+
+        function runTokenizationTests() {
+            const testsDiv = document.getElementById('tokenization-tests');
+            
+            // Get all indexed terms
+            const allTerms = new Set();
+            const docs = searchIndex.documentStore.docs;
+            for (const docId in docs) {
+                const doc = docs[docId];
+                if (doc.title) {
+                    doc.title.split(' ').forEach(t => allTerms.add(t));
+                }
+                if (doc.body) {
+                    doc.body.split(' ').forEach(t => allTerms.add(t));
+                }
+            }
+            
+            // Check for Chinese terms
+            const chineseTerms = Array.from(allTerms).filter(t => /[\u4e00-\u9fff]/.test(t));
+            
+            testsDiv.innerHTML = `
+                <div class="pass test-result">
+                    <strong>✅ 中文分词检测</strong><br>
+                    索引中包含 ${chineseTerms.length} 个中文词汇<br>
+                    示例：${chineseTerms.slice(0, 20).join(', ')}${chineseTerms.length > 20 ? '...' : ''}
+                </div>
+                <div class="info test-result">
+                    <strong>ℹ️ 分词分析</strong><br>
+                    如果看到中文词汇被正确分词（如"中文"、"分词"、"搜索"等），说明 jieba 分词工作正常。<br>
+                    如果看到的是整句中文作为一个 token，说明分词可能未生效。
+                </div>
+            `;
+        }
+
+        function doSearch() {
+            if (!searchIndex) {
+                document.getElementById('search-results').innerHTML = '<p class="info test-result">请先加载搜索索引</p>';
+                return;
+            }
+            
+            const query = document.getElementById('search-input').value.trim();
+            if (!query) {
+                document.getElementById('search-results').innerHTML = '';
+                return;
+            }
+            
+            // Use elasticlunr to search
+            const results = searchIndex.search(query, {
+                bool: 'OR',
+                expand: true,
+                fields: {
+                    title: {boost: 2},
+                    body: {boost: 1},
+                    breadcrumbs: {boost: 0.5}
+                }
+            });
+            
+            const resultsDiv = document.getElementById('search-results');
+            if (results.length === 0) {
+                resultsDiv.innerHTML = '<p class="fail test-result">未找到匹配的结果</p>';
+                return;
+            }
+            
+            resultsDiv.innerHTML = `<p class="info test-result">找到 ${results.length} 个结果</p>` +
+                results.map(r => {
+                    const doc = searchIndex.documentStore.docs[r.ref];
+                    const url = docUrls[r.ref];
+                    return `
+                        <div class="result-item">
+                            <a href="${url}">${escapeHtml(doc.title)}</a>
+                            <br><small>${escapeHtml(doc.breadcrumbs)}</small>
+                            <p>${escapeHtml(doc.body.substring(0, 200))}...</p>
+                        </div>
+                    `;
+                }).join('');
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+    </script>
+</body>
+</html>
