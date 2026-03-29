@@ -14,6 +14,11 @@ use tracing::{error, info};
 mod cmd;
 
 const VERSION: &str = concat!("v", clap::crate_version!());
+const VERSION_WITH_FEATURES: &str = concat!(
+    "v",
+    clap::crate_version!(),
+    " (with Chinese search support)"
+);
 
 fn main() {
     init_logger();
@@ -59,12 +64,14 @@ fn create_clap_command() -> Command {
     let app = Command::new(clap::crate_name!())
         .about(clap::crate_description!())
         .author("Mathieu David <mathieudavid@mathieudavid.org>")
-        .version(VERSION)
+        .version(VERSION_WITH_FEATURES)
         .propagate_version(true)
         .arg_required_else_help(true)
         .after_help(
             "For more information about a specific command, try `mdbook <command> --help`\n\
-             The source code for mdBook is available at: https://github.com/rust-lang/mdBook",
+             The source code for mdBook is available at: https://github.com/rust-lang/mdBook\n\
+             \n\
+             🇨🇳 This build includes Chinese search support powered by jieba-rs.",
         )
         .subcommand(cmd::init::make_subcommand())
         .subcommand(cmd::build::make_subcommand())
