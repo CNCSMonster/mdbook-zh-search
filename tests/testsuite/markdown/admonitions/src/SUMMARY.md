@@ -1,3 +1,0 @@
-# Summary
-
-- [Admonitions](./admonitions.md)

@@ -1,7 +1,0 @@
-<div>
-    HTML block start
-<script>
-    // script stuff <here>
-</script>
-    &lt; still in block
-</div>
