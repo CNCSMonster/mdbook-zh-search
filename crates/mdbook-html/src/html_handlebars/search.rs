@@ -72,7 +72,7 @@ fn is_cjk_text(text: &str) -> bool {
 }
 
 /// Tokenizes text with support for both CJK and Latin languages.
-/// For CJK text, uses jieba for word segmentation with multiple modes for better coverage.
+/// For CJK text, uses jieba for word segmentation with n-gram for better phrase search.
 /// For Latin text, splits on whitespace and hyphens.
 fn tokenize(text: &str) -> Vec<String> {
     if is_cjk_text(text) {
@@ -86,17 +86,38 @@ fn tokenize(text: &str) -> Vec<String> {
             .filter(|s| !s.is_empty() && s.len() <= MAX_WORD_LENGTH_TO_INDEX && !is_stop_word(s))
             .collect();
         
-        // Also add character-level bigrams for better search recall
-        let chars: Vec<char> = text.chars().filter(|c| !c.is_whitespace()).collect();
+        tokens.extend(jieba_tokens);
+        
+        // Add character n-grams for phrase search support
+        // This helps when user searches for phrases like "一句话总结"
+        let chars: Vec<char> = text.chars()
+            .filter(|c| !c.is_whitespace())
+            .collect();
+        
+        // Bigrams (2-character sequences)
         for i in 0..chars.len().saturating_sub(1) {
             let bigram: String = chars[i..i+2].iter().collect();
-            if bigram.len() == 2 && !is_stop_word(&bigram) && !tokens.contains(&bigram) {
+            if bigram.chars().all(|c| !c.is_ascii_punctuation()) &&
+               bigram.len() >= 2 && 
+               !is_stop_word(&bigram) && 
+               !tokens.contains(&bigram) 
+            {
                 tokens.push(bigram.to_lowercase());
             }
         }
         
-        // Combine both tokenization methods
-        tokens.extend(jieba_tokens);
+        // Trigrams (3-character sequences) for better phrase matching
+        for i in 0..chars.len().saturating_sub(2) {
+            let trigram: String = chars[i..i+3].iter().collect();
+            if trigram.chars().all(|c| !c.is_ascii_punctuation()) &&
+               trigram.len() >= 3 && 
+               !is_stop_word(&trigram) && 
+               !tokens.contains(&trigram) 
+            {
+                tokens.push(trigram.to_lowercase());
+            }
+        }
+        
         tokens.sort();
         tokens.dedup();
         tokens

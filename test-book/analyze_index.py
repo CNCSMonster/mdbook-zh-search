@@ -27,7 +27,9 @@ def extract_tokens_from_trie(node, prefix='', tokens=None):
     
     # If this node has 'df' (document frequency), it's a terminal node
     if 'df' in node and node['df'] > 0:
-        tokens.add(prefix)
+        # Remove 'root' prefix from token
+        clean_token = prefix[4:] if prefix.startswith('root') else prefix
+        tokens.add(clean_token)
     
     for key, value in node.items():
         if key not in ['df', 'docs', '$']:

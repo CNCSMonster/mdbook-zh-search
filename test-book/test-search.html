@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>测试中文搜索</title>
+    <style>
+        body { font-family: sans-serif; max-width: 800px; margin: 50px auto; padding: 20px; }
+        .test { margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }
+        .pass { background: #d4edda; }
+        .fail { background: #f8d7da; }
+        input { padding: 10px; width: 300px; font-size: 16px; }
+        button { padding: 10px 20px; font-size: 16px; cursor: pointer; }
+        #results { margin-top: 20px; }
+        .result { padding: 10px; border-bottom: 1px solid #eee; }
+    </style>
+</head>
+<body>
+    <h1>🔍 中文搜索测试</h1>
+    
+    <div class="test">
+        <h3>测试 1: 搜索"总结"</h3>
+        <input type="text" id="search1" value="总结" readonly>
+        <button onclick="doSearch('search1', 'results1')">搜索</button>
+        <div id="results1"></div>
+    </div>
+    
+    <div class="test">
+        <h3>测试 2: 搜索"搜索"</h3>
+        <input type="text" id="search2" value="搜索" readonly>
+        <button onclick="doSearch('search2', 'results2')">搜索</button>
+        <div id="results2"></div>
+    </div>
+    
+    <div class="test">
+        <h3>测试 3: 搜索"一句话"</h3>
+        <input type="text" id="search3" value="一句话" readonly>
+        <button onclick="doSearch('search3', 'results3')">搜索</button>
+        <div id="results3"></div>
+    </div>
+    
+    <div class="test">
+        <h3>测试 4: 搜索"一句话总结"（完整短语）</h3>
+        <input type="text" id="search4" value="一句话总结" readonly>
+        <button onclick="doSearch('search4', 'results4')">搜索</button>
+        <div id="results4"></div>
+    </div>
+    
+    <script>
+        // Load search index
+        const script = document.createElement('script');
+        script.src = 'searchindex-d7b98c74.js';
+        script.onload = () => console.log('Search index loaded');
+        document.head.appendChild(script);
+        
+        function doSearch(inputId, resultsId) {
+            const query = document.getElementById(inputId).value;
+            const resultsDiv = document.getElementById(resultsId);
+            
+            if (!window.search || !window.search.index) {
+                resultsDiv.innerHTML = '<p class="fail">❌ 搜索索引未加载</p>';
+                return;
+            }
+            
+            const searchIndex = window.search.index;
+            const docUrls = window.search.doc_urls;
+            
+            const results = searchIndex.search(query, {
+                bool: 'OR',
+                expand: true,
+                fields: {
+                    title: {boost: 2},
+                    body: {boost: 1},
+                    breadcrumbs: {boost: 0.5}
+                }
+            });
+            
+            if (results.length === 0) {
+                resultsDiv.innerHTML = '<p class="fail">❌ 未找到结果</p>';
+                return;
+            }
+            
+            resultsDiv.innerHTML = `<p class="pass">✅ 找到 ${results.length} 个结果</p>` +
+                results.map(r => {
+                    const doc = searchIndex.documentStore.docs[r.ref];
+                    const url = docUrls[r.ref];
+                    return `<div class="result">
+                        <a href="${url}" target="_blank">${doc.title}</a>
+                        <br><small>${doc.breadcrumbs}</small>
+                    </div>`;
+                }).join('');
+        }
+    </script>
+</body>
+</html>
